@@ -34,14 +34,14 @@ This is the non-smart system (older system) from Bosch.
 * I always kept these batteries fully charged;
 * Connected to the Bosch charger whenever I got at home or at office;
 * Also during weekends, breaks, vacations;
-* After 45.000km, about 70% range left (compared to new set of batteries).
+* After 45.000km, about 60%-70% range left (compared to new set of batteries).
 
 ### Second set of batteries (dual 500Wh)
 * At home: charge just in time (weekdays, start 3AM in morning); stop at 90%;
 * At office: start immediately charging, as I sometimes have to leave (unplanned) a bit earlier; stop at 90%;
 * During weekends/vacations, store both batteries at 30-50%
 * Immediately recharge till 30%-50% if battery is below 30% 
-* Currently, after ca. 40.000km, >95% range left.
+* Currently, after ca. 50.000km, >95% range left.
 
 ## Operating Principle
 * Based on a Shelly Plus 1PM
@@ -95,15 +95,17 @@ PowerOnState 1
 ; var1: Internal variable: cutoff power; don't change
 ; var2: Current power consumption
 ; var3: "Timer Flag"; timer triggered; pending firing (1:timer triggered; 0:timer not active) 
-; mem1: Cutoff power; parameter; change if you need different value
+; mem1: Cutoff power; parameter; change if you need different value; tested with 500Wh powertubes; 
+;       Probably higher for eg 750Wh powertube and lower for 300Wh battery
+;       Preferably measure once every 5min power consumption of a full charge cycle to determine right value
 ; mem2: Actual cutoff power when charging will stop; Read back for status/debug
 ; mem3: Timer delay (seconds); parameter; change if you need different delay
 ; mem4; Charging will start mem4 minutes after midnight. e.g. 360 = 6AM
 
 ; 170W is cut-off power
-; 35sec delay; is enough to switch from batt1 to batt2 and recheck power consumption
+; 60sec delay; is enough to switch from batt1 to batt2 and recheck power consumption
 ; Disable and clear all rules
-Backlog Rule0 0; Rule1 ''; Rule2 ''; Rule3 ''; TELEPERIOD 10; mem1 160; mem2 0; mem3 35; mem4 360; PowerOnState 1
+Backlog Rule0 0; Rule1 "; Rule2 "; Rule3 "; TELEPERIOD 10; mem1 160; mem2 0; mem3 60; mem4 360; PowerOnState 1
 
 ; Set variable state after reboot (default is charging)
 ; Set time, otherwise timers don't work
@@ -132,30 +134,26 @@ RULE1
  ; If charge power is below cutoff power and timer1 is not pending, start timer1 
  ; to allow eg changing from batt1 to batt2 - which will cause a temporarily power dip.
  ON Energy#Power<%var1% DO IF (var3==0) backlog var3 1; ruletimer1 %mem3%; ENDIF ENDON
+
+ ; Check after delay, if power is still below cutoff
+ ; If true, stop charging and store actual power in mem2
+ ; Always clear timer flag
+ ON rules#timer=1 DO IF (var2<%var1%) backlog var1 -1; power 0 ;var3 0; mem2 %var2% ELSE var3 0 ENDIF ENDON
  
  ; WIFI is connected; 3sec delay passed; We are @ HOME; Stop charging; Charging will be triggered by last 
  ; trigger in Rule1 
  ON rules#timer=2 DO backlog var1 -1; power 0; time 0 ENDON
+ 
+ ; Store actual power consumption in var2 - used in other rules  
+ ON Energy#Power DO var2 %value% ENDON
  
  ; start charging at specified time
  ; mem4 minutes after midnight
  ON Time#Minute=%mem4% DO power 1 ENDON
 ;; END RULE1
 	
-; Check after delay, if power is still below cutoff
-; If true, stop charging and store actual power in mem2
-; Always clear timer flag
-RULE2
- ON rules#timer=1 DO IF (var2<%var1%) backlog var1 -1; power 0 ;var3 0; mem2 %var2% ELSE var3 0 ENDIF ENDON
-;; END RULE2  
-  
-; Store actual power consumption in var2 - used in other rules  
-RULE3
- ON Energy#Power DO var2 %value% ENDON
-;; END RULE3   
-   
 ; Enable all rules   
-Backlog Rule1 1; Rule2 1; Rule3 1
+Backlog Rule1 1;
 ```
 ### Parameters
 In console, you can change a few parameters (after you have programmed the rules from previous section)
